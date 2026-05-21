@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>五目並べ</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #1a1a2e;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 8px;
+      gap: 14px;
+      touch-action: manipulation;
+    }
+
+    h1 {
+      color: #e2c27d;
+      font-size: 1.6rem;
+      letter-spacing: 0.1em;
+      text-shadow: 0 2px 8px rgba(226,194,125,0.4);
+    }
+
+    .info-bar {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 12px;
+      padding: 10px 20px;
+    }
+
+    .score-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .score-label { font-size: 0.7rem; color: #8899aa; text-transform: uppercase; letter-spacing: 0.05em; }
+    .score-value { font-size: 1.4rem; font-weight: bold; }
+    .score-value.black { color: #ffffff; }
+    .score-value.white { color: #e2c27d; }
+
+    .divider { width: 1px; height: 40px; background: #0f3460; }
+
+    .turn-indicator { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .turn-label { font-size: 0.7rem; color: #8899aa; text-transform: uppercase; }
+
+    .turn-stone {
+      width: 28px; height: 28px; border-radius: 50%;
+      transition: all 0.3s ease;
+    }
+    .turn-stone.black {
+      background: radial-gradient(circle at 35% 35%, #666, #111);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.8), inset 0 1px 2px rgba(255,255,255,0.2);
+    }
+    .turn-stone.white {
+      background: radial-gradient(circle at 35% 35%, #fff, #bbb);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,255,255,0.8);
+    }
+
+    .board-wrap {
+      padding: 12px;
+      background: #c8a86b;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      width: min(100vw - 16px, 500px);
+    }
+
+    canvas { display: block; width: 100%; height: auto; touch-action: none; }
+
+    .status {
+      font-size: 1rem;
+      color: #e2c27d;
+      text-align: center;
+      min-height: 1.4em;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+    .status.winner {
+      font-size: 1.2rem;
+      animation: pulse 0.9s ease-in-out infinite alternate;
+    }
+    @keyframes pulse {
+      from { opacity: 0.8; transform: scale(1); }
+      to   { opacity: 1;   transform: scale(1.06); }
+    }
+
+    .btn {
+      padding: 12px 40px;
+      font-size: 1rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #e2c27d, #c8a050);
+      color: #1a1a2e;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      box-shadow: 0 4px 12px rgba(226,194,125,0.3);
+      transition: transform 0.1s;
+    }
+    .btn:active { transform: scale(0.96); }
+  </style>
+</head>
+<body>
+
+<h1>五目並べ</h1>
+
+<div class="info-bar">
+  <div class="score-box">
+    <span class="score-label">● 黒</span>
+    <span class="score-value black" id="sb">0</span>
+  </div>
+  <div class="divider"></div>
+  <div class="turn-indicator">
+    <span class="turn-label">手番</span>
+    <div class="turn-stone black" id="ts"></div>
+  </div>
+  <div class="divider"></div>
+  <div class="score-box">
+    <span class="score-label">○ 白</span>
+    <span class="score-value white" id="sw">0</span>
+  </div>
+</div>
+
+<div class="board-wrap">
+  <canvas id="c"></canvas>
+</div>
+
+<div class="status" id="st">黒の番です</div>
+<button class="btn" id="restart">もう一度</button>
+
+<script>
+const N = 15, CELL = 36, M = 18;
+const SZ = CELL * (N - 1) + M * 2;
+const canvas = document.getElementById('c');
+canvas.width = canvas.height = SZ;
+const ctx = canvas.getContext('2d');
+
+let board, turn, winner, winLine, scores = {black:0, white:0};
+
+function init() {
+  board = Array.from({length:N}, () => Array(N).fill(null));
+  turn = 'black'; winner = null; winLine = [];
+  render(); updateUI();
+}
+
+function check(r, c, p) {
+  const D = [[1,0],[0,1],[1,1],[1,-1]];
+  for (const [dr,dc] of D) {
+    const line = [[r,c]];
+    for (let s=1;s<=4;s++) { const nr=r+dr*s,nc=c+dc*s; if(nr>=0&&nr<N&&nc>=0&&nc<N&&board[nr][nc]===p) line.push([nr,nc]); else break; }
+    for (let s=1;s<=4;s++) { const nr=r-dr*s,nc=c-dc*s; if(nr>=0&&nr<N&&nc>=0&&nc<N&&board[nr][nc]===p) line.push([nr,nc]); else break; }
+    if (line.length >= 5) return line;
+  }
+  return null;
+}
+
+function render() {
+  ctx.clearRect(0,0,SZ,SZ);
+
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
+  for (let i=0;i<N;i++) {
+    const x=M+i*CELL, y=M+i*CELL;
+    ctx.beginPath(); ctx.moveTo(x,M); ctx.lineTo(x,M+(N-1)*CELL); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(M,y); ctx.lineTo(M+(N-1)*CELL,y); ctx.stroke();
+  }
+
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  for (const [r,c] of [[3,3],[3,7],[3,11],[7,3],[7,7],[7,11],[11,3],[11,7],[11,11]]) {
+    ctx.beginPath(); ctx.arc(M+c*CELL,M+r*CELL,3,0,Math.PI*2); ctx.fill();
+  }
+
+  for (let r=0;r<N;r++) for (let c=0;c<N;c++) if (board[r][c]) drawStone(r,c,board[r][c],false);
+
+  if (winLine.length) {
+    ctx.strokeStyle='#ff4444'; ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.moveTo(M+winLine[0][1]*CELL, M+winLine[0][0]*CELL);
+    for (const [r,c] of winLine) ctx.lineTo(M+c*CELL,M+r*CELL);
+    ctx.stroke();
+    for (const [r,c] of winLine) drawStone(r,c,board[r][c],true);
+  }
+}
+
+function drawStone(r,c,p,hi) {
+  const x=M+c*CELL, y=M+r*CELL, rad=CELL*0.43;
+  const g=ctx.createRadialGradient(x-rad*0.3,y-rad*0.3,rad*0.05,x,y,rad);
+  if (p==='black') { g.addColorStop(0,hi?'#888':'#555'); g.addColorStop(1,'#111'); }
+  else             { g.addColorStop(0,'#fff'); g.addColorStop(1,hi?'#ffe066':'#ccc'); }
+  ctx.beginPath(); ctx.arc(x,y,rad,0,Math.PI*2);
+  ctx.fillStyle=g; ctx.fill();
+  ctx.strokeStyle=p==='black'?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.3)'; ctx.lineWidth=1; ctx.stroke();
+}
+
+function updateUI() {
+  document.getElementById('sb').textContent = scores.black;
+  document.getElementById('sw').textContent = scores.white;
+  const st = document.getElementById('st');
+  const ts = document.getElementById('ts');
+  if (winner) {
+    st.textContent = `🎉 ${winner==='black'?'黒':'白'}の勝ち！`;
+    st.className = 'status winner';
+    ts.className = `turn-stone ${winner}`;
+  } else {
+    st.textContent = `${turn==='black'?'黒':'白'}の番です`;
+    st.className = 'status';
+    ts.className = `turn-stone ${turn}`;
+  }
+}
+
+function getCell(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const sx = SZ / rect.width, sy = SZ / rect.height;
+  const mx = (clientX - rect.left) * sx;
+  const my = (clientY - rect.top)  * sy;
+  return [Math.round((my - M) / CELL), Math.round((mx - M) / CELL)];
+}
+
+function place(r, c) {
+  if (winner) return;
+  if (r<0||r>=N||c<0||c>=N||board[r][c]) return;
+  board[r][c] = turn;
+  const line = check(r,c,turn);
+  if (line) { winner=turn; winLine=line.slice(0,5); scores[turn]++; }
+  else turn = turn==='black'?'white':'black';
+  render(); updateUI();
+}
+
+canvas.addEventListener('click', e => {
+  const [r,c] = getCell(e.clientX, e.clientY);
+  place(r, c);
+});
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  const [r,c] = getCell(t.clientX, t.clientY);
+  place(r, c);
+}, {passive: false});
+
+document.getElementById('restart').addEventListener('click', init);
+
+init();
+</script>
+</body>
+</html>
