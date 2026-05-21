@@ -93,20 +93,39 @@
       to   { opacity: 1;   transform: scale(1.06); }
     }
 
+    .btns {
+      display: flex;
+      gap: 12px;
+    }
+
     .btn {
-      padding: 12px 40px;
+      padding: 12px 28px;
       font-size: 1rem;
       font-weight: 700;
-      background: linear-gradient(135deg, #e2c27d, #c8a050);
-      color: #1a1a2e;
       border: none;
       border-radius: 8px;
       cursor: pointer;
       letter-spacing: 0.05em;
-      box-shadow: 0 4px 12px rgba(226,194,125,0.3);
       transition: transform 0.1s;
     }
     .btn:active { transform: scale(0.96); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #e2c27d, #c8a050);
+      color: #1a1a2e;
+      box-shadow: 0 4px 12px rgba(226,194,125,0.3);
+    }
+
+    .btn-undo {
+      background: linear-gradient(135deg, #4a6080, #2e3f56);
+      color: #ccd8e8;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .btn-undo:disabled {
+      opacity: 0.35;
+      cursor: default;
+      transform: none;
+    }
   </style>
 </head>
 <body>
@@ -135,7 +154,10 @@
 </div>
 
 <div class="status" id="st">黒の番です</div>
-<button class="btn" id="restart">もう一度</button>
+<div class="btns">
+  <button class="btn btn-undo" id="undo" disabled>1手戻す</button>
+  <button class="btn btn-primary" id="restart">もう一度</button>
+</div>
 
 <script>
 const N = 15, CELL = 36, M = 18;
@@ -144,11 +166,11 @@ const canvas = document.getElementById('c');
 canvas.width = canvas.height = SZ;
 const ctx = canvas.getContext('2d');
 
-let board, turn, winner, winLine, scores = {black:0, white:0};
+let board, turn, winner, winLine, history, scores = {black:0, white:0};
 
 function init() {
   board = Array.from({length:N}, () => Array(N).fill(null));
-  turn = 'black'; winner = null; winLine = [];
+  turn = 'black'; winner = null; winLine = []; history = [];
   render(); updateUI();
 }
 
@@ -214,6 +236,7 @@ function updateUI() {
     st.className = 'status';
     ts.className = `turn-stone ${turn}`;
   }
+  document.getElementById('undo').disabled = history.length === 0;
 }
 
 function getCell(clientX, clientY) {
@@ -227,10 +250,22 @@ function getCell(clientX, clientY) {
 function place(r, c) {
   if (winner) return;
   if (r<0||r>=N||c<0||c>=N||board[r][c]) return;
+  history.push({r, c, turn, winner, winLine: [...winLine]});
   board[r][c] = turn;
   const line = check(r,c,turn);
   if (line) { winner=turn; winLine=line.slice(0,5); scores[turn]++; }
   else turn = turn==='black'?'white':'black';
+  render(); updateUI();
+}
+
+function undo() {
+  if (!history.length) return;
+  const prev = history.pop();
+  if (winner) scores[winner]--;
+  board[prev.r][prev.c] = null;
+  turn = prev.turn;
+  winner = prev.winner;
+  winLine = prev.winLine;
   render(); updateUI();
 }
 
@@ -246,6 +281,7 @@ canvas.addEventListener('touchend', e => {
   place(r, c);
 }, {passive: false});
 
+document.getElementById('undo').addEventListener('click', undo);
 document.getElementById('restart').addEventListener('click', init);
 
 init();
